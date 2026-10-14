@@ -1,28 +1,38 @@
+
 name: Deploy Web
 
 on:
   push:
     branches:
-      - main # 或者您的主分支名称
-  workflow_dispatch: # 允许手动触发
+      - main
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+# 允许 GitHub Actions 创建 Release
+permissions:
+  contents: write
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
 
       - name: 创建环境变量文件
+        env:
+          VITE_API: ${{ secrets.VITE_API }}
+          VITE_API_MUSIC: ${{ secrets.VITE_API_MUSIC }}
         run: |
-          echo "VITE_API=${{ secrets.VITE_API }}" > .env.production.local
-          echo "VITE_API_MUSIC=${{ secrets.VITE_API_MUSIC }}" >> .env.production.local
-          # 添加其他需要的环境变量
-          cat .env.production.local # 查看创建的文件内容，调试用
+          printf 'VITE_API=%s\nVITE_API_MUSIC=%s\n' \
+            "$VITE_API" "$VITE_API_MUSIC" > .env.production.local
 
       - name: Install Dependencies
         run: npm install
@@ -30,8 +40,10 @@ jobs:
       - name: Build
         run: npm run build
 
+      # 仅在 main 分支运行时部署到服务器
       - name: Deploy to Server
-        uses: appleboy/scp-action@master
+        if: github.ref == 'refs/heads/main'
+        uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USERNAME }}
@@ -41,7 +53,8 @@ jobs:
           strip_components: 2
 
       - name: Execute Remote Commands
-        uses: appleboy/ssh-action@master
+        if: github.ref == 'refs/heads/main'
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USERNAME }}
@@ -49,3 +62,19 @@ jobs:
           script: |
             cd ${{ secrets.DEPLOY_PATH }}
             echo "部署完成于 $(date)"
+
+      # 仅在 v 开头的版本标签触发时打包
+      - name: Package Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          test -d out/renderer
+          cd out/renderer
+          zip -qr "$GITHUB_WORKSPACE/web-${GITHUB_REF_NAME}.zip" .
+
+      # 自动创建并发布 GitHub Release
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: web-${{ github.ref_name }}.zip
+          generate_release_notes: true

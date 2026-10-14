@@ -1,12 +1,26 @@
 name: Build and Release
 
 on:
+  # 推送任意名称的 Git 标签时，自动构建并发布
   push:
     tags:
-      - 'v*'
+      - '**'
+
+  # 支持在 GitHub Actions 页面手动触发
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: '发布标签，例如 1.0.0、release-1.0.0、v1.0.0'
+        required: true
+        type: string
+
+# 允许创建 GitHub Release 和上传发行文件
+permissions:
+  contents: write
 
 jobs:
   build:
+    name: Build ${{ matrix.id }}
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -16,12 +30,15 @@ jobs:
           - id: mac-x64
             os: macos-latest
             build_command: npm run build:mac:x64
+
           - id: mac-arm64
             os: macos-latest
             build_command: npm run build:mac:arm64
+
           - id: windows
             os: windows-latest
             build_command: npm run build:win
+
           - id: linux
             os: ubuntu-latest
             build_command: npm run build:linux
@@ -33,26 +50,35 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: '24'
 
       - name: Install dependencies
         run: npm install
 
+      # Linux 构建所需的系统依赖
       - name: Install Linux build dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev webkit2gtk-4.0 libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
 
+      # 执行各平台对应的构建脚本
       - name: Build artifacts
         run: ${{ matrix.build_command }}
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
+      # 清理 macOS 单架构更新配置，稍后统一合并
       - name: Prepare mac update metadata
         if: startsWith(matrix.id, 'mac-')
         run: rm -f dist/latest-mac.yml
 
+      # 上传各平台构建产物，供 Release 作业下载
       - name: Upload release bundle
         uses: actions/upload-artifact@v4
         with:
@@ -69,6 +95,7 @@ jobs:
             dist/*.blockmap
 
   release:
+    name: Publish GitHub Release
     needs: build
     runs-on: ubuntu-latest
 
@@ -76,37 +103,94 @@ jobs:
       - name: Check out Git repository
         uses: actions/checkout@v4
 
-      - name: Get version from tag
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
-
-      - name: Read release notes
+      # 确定此次发布使用的标签
+      - name: Determine release tag
+        id: release_meta
+        shell: bash
+        env:
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
-          NOTES=$(awk "/## \[v${{ env.VERSION }}\]/{p=1;print;next} /## \[v/{p=0}p" CHANGELOG.md)
-          echo "NOTES<<EOF" >> $GITHUB_ENV
-          echo "$NOTES" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            RELEASE_TAG="$INPUT_RELEASE_TAG"
+          else
+            RELEASE_TAG="$GITHUB_REF_NAME"
+          fi
 
+          if [[ -z "$RELEASE_TAG" || "$RELEASE_TAG" =~ [[:space:]] ]]; then
+            echo "错误：发布标签不能为空，也不能包含空白字符"
+            exit 1
+          fi
+
+          # 有 v 前缀就去掉，没有则保持原样
+          VERSION="${RELEASE_TAG#v}"
+
+          echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          echo "本次发布标签：$RELEASE_TAG"
+          echo "对应版本号：$VERSION"
+
+      # 从 CHANGELOG.md 中提取对应版本的更新日志
+      - name: Read release notes
+        shell: bash
+        env:
+          VERSION: ${{ steps.release_meta.outputs.version }}
+          RELEASE_TAG: ${{ steps.release_meta.outputs.tag }}
+        run: |
+          if [[ -f CHANGELOG.md ]]; then
+            awk -v version="$VERSION" '
+              index($0, "## [v" version "]") == 1 ||
+              index($0, "## [" version "]") == 1 {
+                in_section = 1
+                print
+                next
+              }
+              in_section && /^## \[/ {
+                exit
+              }
+              in_section {
+                print
+              }
+            ' CHANGELOG.md > release-notes.md
+          else
+            : > release-notes.md
+          fi
+
+          # 没有匹配到更新日志时，使用默认说明
+          if [[ ! -s release-notes.md ]]; then
+            printf 'Automated release for tag %s.\n' \
+              "$RELEASE_TAG" > release-notes.md
+          fi
+
+      # 下载四个平台的构建产物
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-artifacts
 
+      # 整理发行文件，并合并 macOS 更新配置
       - name: Prepare release files
         run: |
           mkdir -p release-upload
+
           find release-artifacts -type f \
             ! -name 'latest-mac-x64.yml' \
             ! -name 'latest-mac-arm64.yml' \
             -exec cp {} release-upload/ \;
+
           node scripts/merge_latest_mac_yml.mjs \
             release-artifacts/mac-x64/latest-mac-x64.yml \
             release-artifacts/mac-arm64/latest-mac-arm64.yml \
             release-upload/latest-mac.yml
 
+      # 创建或更新对应标签的 GitHub Release
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          body: ${{ env.NOTES }}
+          tag_name: ${{ steps.release_meta.outputs.tag }}
+          name: ${{ steps.release_meta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          body_path: release-notes.md
           draft: false
           prerelease: false
           files: release-upload/*

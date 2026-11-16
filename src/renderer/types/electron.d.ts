@@ -3,6 +3,11 @@ import type { LocalMusicMeta } from './localMusic';
 export interface IElectronAPI {
   minimize: () => void;
   maximize: () => void;
+  isMaximized: () => Promise<boolean>;
+  onWindowMaximizedState: (_callback: (_maximized: boolean) => void) => () => void;
+  toggleFullScreen: () => void;
+  isFullScreen: () => Promise<boolean>;
+  onWindowFullScreenState: (_callback: (_fullscreen: boolean) => void) => () => void;
   close: () => void;
   dragStart: (_data: string) => void;
   miniTray: () => void;
@@ -12,6 +17,8 @@ export interface IElectronAPI {
   unblockMusic: (_id: number) => Promise<string>;
   importCustomApiPlugin: () => Promise<{ name: string; content: string } | null>;
   importLxMusicScript: () => Promise<{ name: string; content: string } | null>;
+  importMusicSourcePlugin: () => Promise<{ name: string; content: string; path?: string } | null>;
+  fetchMusicSourcePlugin: (_url: string) => Promise<{ name: string; content: string; url: string }>;
   onLyricWindowClosed: (_callback: () => void) => void;
   onLyricWindowReady: (_callback: () => void) => void;
   onLanguageChanged: (_callback: (_locale: string) => void) => void;

@@ -48,6 +48,8 @@ export default {
     processing: '解析中...',
     clear: 'カスタム音源をクリア',
     customApiFailed: 'カスタムAPIの解析に失敗しました。内蔵音源を試しています...',
+    noSourceConfigured:
+      'この曲には音源が必要ですが、利用可能な音源が設定されていません。設定 → 再生 → 音源設定 で有効化またはインポートしてください',
     customApiError: 'カスタムAPIのリクエストでエラーが発生しました。内蔵音源を試しています...'
   },
   playBar: {
@@ -77,7 +79,8 @@ export default {
     advancedControls: 'その他の設定',
     intelligenceMode: {
       title: 'インテリジェンスモード',
-      needCookieLogin: 'Cookie方式でログインしてからインテリジェンスモードを使用してください',
+      needRealLogin:
+        'Cookie または QR コードでログインしてください。UID ログインではインテリジェンスモードを利用できません',
       noFavoritePlaylist: '「お気に入りの音楽」プレイリストが見つかりません',
       noLikedSongs: 'まだ「いいね」した楽曲がありません',
       loading: 'インテリジェンスモードを読み込み中',

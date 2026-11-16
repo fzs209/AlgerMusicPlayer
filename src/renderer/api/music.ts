@@ -1,12 +1,22 @@
 import { musicDB } from '@/hooks/MusicHook';
+import { resolveSong } from '@/services/musicSource/resolver';
 import { useSettingsStore, useUserStore } from '@/store';
 import type { ILyric } from '@/types/lyric';
 import type { SongResult } from '@/types/music';
 import request from '@/utils/request';
 
-import { MusicParser, type MusicParseResult } from './musicParser';
+type MusicParseResult = {
+  data: {
+    code: number;
+    message: string;
+    data?: { url: string; type?: string; br?: number; [key: string]: any };
+  };
+};
 
-const { addData, getData, deleteData } = musicDB;
+// musicDB 通过顶层 await 初始化，单 chunk 打包下模块作用域直接解构会命中
+// TDZ（Cannot access 'musicDB' before initialization），改为惰性访问。
+const saveData = (...args: any[]) => (musicDB as any).saveData(...args);
+const getData = (...args: any[]) => (musicDB as any).getData(...args);
 
 // 将 FM 歌曲移至垃圾桶（不喜欢）
 export const fmTrash = (id: number) => {
@@ -60,25 +70,26 @@ export const getMusicDetail = (ids: Array<number>) => {
 };
 
 // 根据音乐Id获取音乐歌词
-export const getMusicLrc = async (id: number) => {
+export const getMusicLrc = async (id: number): Promise<{ data: ILyric }> => {
   const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000; // 10天的毫秒数
 
   try {
     // 尝试获取缓存的歌词
     const cachedLyric = await getData('music_lyric', id);
     if (cachedLyric?.createTime && Date.now() - cachedLyric.createTime < TEN_DAYS_MS) {
-      return { ...cachedLyric };
+      return { ...cachedLyric, data: cachedLyric.data };
     }
 
     // 获取新的歌词数据
     const res = await request.get<ILyric>('/lyric/new', { params: { id } });
 
-    // 只有在成功获取新数据后才删除旧缓存并添加新缓存
     if (res?.data) {
-      if (cachedLyric) {
-        await deleteData('music_lyric', id);
+      try {
+        // 歌词面板和预加载可能并发请求同一首歌，使用 put 避免重复主键。
+        await saveData('music_lyric', { id, data: res.data, createTime: Date.now() });
+      } catch (error) {
+        console.warn('保存歌词缓存失败:', error);
       }
-      addData('music_lyric', { id, data: res.data, createTime: Date.now() });
     }
 
     return res;
@@ -89,16 +100,31 @@ export const getMusicLrc = async (id: number) => {
 };
 
 /**
- * 获取解析后的音乐URL
+ * 获取解析后的音乐URL（兼容薄包装：内部走统一解析器）
  * @param id 歌曲ID
  * @param data 歌曲数据
- * @returns 解析结果
+ * @returns 解析结果（旧 MusicParseResult 形状）
  */
 export const getParsingMusicUrl = async (
-  id: number,
+  _id: number,
   data: SongResult
 ): Promise<MusicParseResult> => {
-  return await MusicParser.parseMusic(id, data);
+  const result = await resolveSong(data);
+  if (!result) {
+    return { data: { code: 404, message: '所有解析方式都失败了', data: undefined } };
+  }
+  return {
+    data: {
+      code: 200,
+      message: 'success',
+      data: {
+        url: result.media.url,
+        type: result.media.format,
+        br: result.media.br,
+        pluginName: result.providerName
+      }
+    }
+  };
 };
 
 // 收藏歌曲

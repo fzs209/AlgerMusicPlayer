@@ -48,6 +48,8 @@ export default {
     processing: 'Processing...',
     clear: 'Clear Custom Source',
     customApiFailed: 'Custom API parsing failed, trying built-in sources...',
+    noSourceConfigured:
+      'This song needs a music source, but none is configured. Go to Settings → Playback → Music Sources to enable or import one',
     customApiError: 'Custom API request error, trying built-in sources...'
   },
   playBar: {
@@ -77,7 +79,8 @@ export default {
     advancedControls: 'Advanced Controls',
     intelligenceMode: {
       title: 'Intelligence Mode',
-      needCookieLogin: 'Please login with Cookie method to use Intelligence Mode',
+      needRealLogin:
+        'Please log in with Cookie or by scanning the QR code; UID login cannot use Intelligence Mode',
       noFavoritePlaylist: 'Favorite playlist not found',
       noLikedSongs: 'You have no liked songs yet',
       loading: 'Loading Intelligence Mode',

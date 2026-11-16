@@ -48,6 +48,8 @@ export default {
     processing: '분석 중...',
     clear: '사용자 정의 음원 지우기',
     customApiFailed: '사용자 정의 API 분석 실패, 기본 음원을 시도합니다...',
+    noSourceConfigured:
+      '이 곡은 음원이 필요하지만 사용 가능한 음원이 설정되지 않았습니다. 설정 → 재생 → 음원 설정에서 활성화하거나 가져오세요',
     customApiError: '사용자 정의 API 요청 오류, 기본 음원을 시도합니다...'
   },
   playBar: {
@@ -77,7 +79,8 @@ export default {
     advancedControls: '고급 설정',
     intelligenceMode: {
       title: '인텔리전스 모드',
-      needCookieLogin: '쿠키 방식으로 로그인한 후 인텔리전스 모드를 사용할 수 있습니다',
+      needRealLogin:
+        '쿠키 또는 QR 코드 로그인 후 사용 가능합니다. UID 로그인에서는 인텔리전스 모드를 사용할 수 없습니다',
       noFavoritePlaylist: '내가 좋아하는 음악 재생목록을 찾을 수 없습니다',
       noLikedSongs: '아직 좋아한 노래가 없습니다',
       loading: '인텔리전스 모드를 불러오는 중',

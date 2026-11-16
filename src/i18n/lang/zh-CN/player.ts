@@ -47,6 +47,8 @@ export default {
     processing: '解析中...',
     clear: '清除自定义音源',
     customApiFailed: '自定义API解析失败，正在尝试使用内置音源...',
+    noSourceConfigured:
+      '该歌曲需要解析音源，但你还没有配置任何可用音源。请到 设置 → 播放 → 配置音源 里启用音源或导入音源插件',
     customApiError: '自定义API请求出错，正在尝试使用内置音源...'
   },
   playBar: {
@@ -76,7 +78,7 @@ export default {
     advancedControls: '更多设置',
     intelligenceMode: {
       title: '心动模式',
-      needCookieLogin: '请使用 Cookie 方式登录后使用心动模式',
+      needRealLogin: '请先使用 Cookie 或扫码登录，UID 登录无法使用心动模式',
       noFavoritePlaylist: '未找到我喜欢的音乐歌单',
       noLikedSongs: '您还没有喜欢的歌曲',
       loading: '正在加载心动模式',
